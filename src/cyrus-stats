@@ -1,0 +1,33 @@
+#!/bin/bash
+
+if [  $# -eq 1 ]
+then
+        mailstore=$1
+else
+        echo "usage: $0 <mailX>"
+        exit
+fi
+
+
+
+
+. /lib/cyrus-ugent/script-functions
+
+get_cyrus_env $mailstore
+
+( find ${STORE_DIR}imap -maxdepth 4 -mindepth 4 -type d ; find ${STORE_DIR} -maxdepth 1 -mindepth 1 -not -name imap -type d ) > ${STORE_DIR}/var/cyrus-dumps/backup_selection.txt
+
+MAILBOXES=undef
+[ -f ${STORE_DIR}/var/cyrus-dumps/mailboxes.txt.1 ] && MAILBOXES=$(wc -l ${STORE_DIR}/var/cyrus-dumps/mailboxes.txt.1 | cut -d' ' -f1)
+
+SIZE=$(read -d '' -ra df < <(LC_ALL=C df -P ${STORE_DIR}); echo "${df[8]}")
+
+USED=$(read -d '' -ra df < <(LC_ALL=C df -P ${STORE_DIR}); echo "${df[9]}")
+
+FREE=$(read -d '' -ra df < <(LC_ALL=C df -P ${STORE_DIR}); echo "${df[10]}")
+
+TIMESTAMP=$(date "+%s")
+
+cat >> ${STORE_DIR}/var/cyrus-dumps/stats << EOF
+$TIMESTAMP;$SIZE;$USED;$FREE;$MAILBOXES;;;;;;;;;;
+EOF

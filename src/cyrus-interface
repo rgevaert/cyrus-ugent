@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+
+. /lib/cyrus-ugent/script-functions
+
+USAGE="Usage: $PROGNAME up|down|status <instance> [force]"
+INSTANCE=${2:?$USAGE}
+
+if [ "$3" == "force" ]
+then
+	FORCE=""
+else
+	FORCE="echo +"
+	echo "Dry run:"
+fi
+
+bring_up_interface()
+{
+	compute_interface_alias $1
+	$FORCE /sbin/ifconfig $INTERFACE $IPADDRESS netmask $NETMASK broadcast $BROADCAST up
+        if [ "$?" != 0 ]; then
+                return 1
+        fi
+	$FORCE arping -c 2 -q -S $IPADDRESS $GATEWAY
+        if [ "$?" != 0 ]; then
+                return 1
+        fi
+	return 0
+
+}
+
+# Function that brings down the network alias for an instance.
+# Name of the alias is computed.
+# Parameters:
+#       $1 = hostname of instance
+# Return value:
+#       0 on success (does not mean the instance started)
+#       1 on failure
+bring_down_interface()
+{
+	compute_interface_alias $1
+	if /sbin/ifconfig -s | grep -q $INTERFACE
+	then
+		$FORCE /sbin/ifconfig $INTERFACE down
+	fi
+	return
+}
+
+status()
+{
+	compute_interface_alias $1
+	if /sbin/ifconfig -s | grep -q $INTERFACE
+	then
+		return 0
+	else
+		return 1
+	fi
+}
+
+case "$1" in
+	
+       up)
+                bring_up_interface $INSTANCE
+                ;;
+        down)
+                bring_down_interface $INSTANCE
+                ;;
+        status)
+                status $INSTANCE
+                ;;
+        *)
+		error_exit "$USAGE"
+                ;;
+esac

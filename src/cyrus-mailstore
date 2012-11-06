@@ -1,0 +1,53 @@
+#!/bin/bash
+
+. /lib/cyrus-ugent/script-functions
+. /lib/lsb/init-functions
+
+USAGE=$(cat <<BLAH
+Usage: $PROGNAME create <instance name>
+                 update
+BLAH
+)
+
+LANG=C
+
+function update_config()
+{
+        instance=$1
+	config_dir=/etc/cyrus-ugent/conf
+	[ -e $config_dir ] || svn co -q svn://savannah.ugent.be/mailstores/trunk/config/generated $config_dir
+
+	svn up -q $config_dir/$instance
+}
+
+function create_instance()
+{
+	instance=$1
+
+	get_cyrus_env $instance
+
+	# Already made
+
+	for d in imap sieve var etc var/imap var/cyrus-dumps
+	do
+		[ -d $STORE_DIR/$d ] && return 0
+		mkdir -p $STORE_DIR/$d
+		chown -R cyrus:mail $STORE_DIR/$d
+	done
+
+	su - cyrus -c "${CYRUS_PATH}/bin/mkimap ${IMAPDCONF}"
+}
+
+case "$1" in
+       create)
+                create_instance $2
+                ;;
+	update|up)
+                update_config $2
+                ;;
+        *)
+	        error_exit "$USAGE"
+                ;;
+esac
+
+exit 0

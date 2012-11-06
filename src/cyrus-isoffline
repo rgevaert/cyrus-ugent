@@ -1,0 +1,17 @@
+#!/bin/bash
+
+. /lib/cyrus-ugent/script-functions
+
+USAGE="Usage: $PROGNAME <mailhost>"
+
+INSTANCE=${1:?$USAGE}
+
+DIR=/srv
+
+# Is de interface van de mailstore nog op?
+if /bin/ping -W 3 -q -c 1 $INSTANCE >/dev/null 2>&1
+then
+	error_exit "$INSTANCE still online, pingable"
+fi
+
+exit 0

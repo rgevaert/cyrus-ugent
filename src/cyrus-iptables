@@ -1,0 +1,64 @@
+#!/bin/bash
+
+BLOCKED_PORTS="imap,imaps,pop3,pop3s,lmtp,sieve,4000"
+
+function usage
+{
+  echo "Usage: $0 block|unblock <host>
+             flush-all|flush-hosts"
+  exit 1
+}
+
+function block
+{
+  host=$1    
+  iptables -A INPUT -d $host -j blockedports
+}
+
+function unblock
+{
+  host=$1    
+  iptables -D INPUT -d $host -j blockedports
+}
+
+function initialize
+{
+  if ! iptables -L blockedports > /dev/null 2>&1
+  then 
+    iptables -N blockedports
+    iptables -A blockedports -m multiport -p tcp --dports $BLOCKED_PORTS -j REJECT
+  fi
+}
+
+function flush-all
+{
+  iptables -F blockedports
+  iptables -F INPUT
+  iptables -X blockedports
+}
+
+function flush-hosts
+{
+  iptables -F INPUT
+}
+
+case "$1" in
+        block)
+                [ -z $2 ] && usage
+                initialize
+                block $2
+                ;;
+        unblock)
+                [ -z $2 ] && usage
+                unblock $2
+                ;;
+        flush-all)
+                flush-all
+                ;;
+        flush-hosts)
+                flush-hosts
+                ;;
+        *)
+                usage
+                ;;
+esac

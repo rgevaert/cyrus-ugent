@@ -1,0 +1,214 @@
+#!/bin/bash
+
+. /lib/cyrus-ugent/script-functions
+
+# Define LSB log_* functions.
+# Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
+. /lib/lsb/init-functions
+
+
+USAGE="Usage: $PROGNAME start|stop|restart|status|reload <instance> [force]"
+RUNDIR="/var/run/cyrus-ugent"
+DEFAULT_FILE=/etc/default/cyrus-ugent
+INSTANCE=${2:?$USAGE}
+
+if [ "$3" == "force" ]
+then
+	FORCE=""
+else
+	FORCE="echo +"
+	echo "Dry run:"
+fi
+
+# Make sure we get sane results on borked locales
+LC_ALL=C
+export LC_ALL
+
+# Overridable defaults
+unset CYRUS_VERBOSE
+unset LISTENQUEUE
+
+[ -r $DEFAULT_FILE ] || error_exit "Can't read $DEFAULT_FILE"
+. $DEFAULT_FILE
+
+
+
+# Function that starts a single saslauthd instance
+# Parameters:
+#       $1 = hostname of instance
+# Return value:
+#       0 on success (does not mean the instance started)
+#       1 on failure
+do_start()
+{
+	INSTANCE=$1
+	/usr/share/cyrus-ugent/cyrus-mailstore update $INSTANCE
+	get_cyrus_env $INSTANCE
+	[ -x $DAEMON ] || error_exit $DAEMON not executable
+
+	[ -d /mail/$INSTANCE/imap ] || /usr/share/cyrus-ugent/cyrus-mailstore create $INSTANCE
+	
+	# Creating of necessary directories
+	mkdir -p $RUNDIR
+	[ -d /var/tmp/$INSTANCE ] || mkdir /var/tmp/$INSTANCE
+	chown root:mail /var/tmp/$INSTANCE
+	chmod g+w /var/tmp/$INSTANCE
+
+	[ -r $CYRUSCONF ] || error_exit "Can read $CYRUSCONF"
+	[ -r $IMAPDCONF ] || error_exit "Can't read $IMAPDCONF"
+
+	# Cleanup old files
+	for file in tls_sessions.db statuscache.db deliver.db
+	do
+		[ -e /mail/$INSTANCE/var/imap/$file ] && rm /mail/$INSTANCE/var/imap/$file
+	done
+        [ -e /mail/$INSTANCE/etc/shutdownsync ] && rm /mail/$INSTANCE/etc/shutdownsync 
+
+	# user_deny.db aanmaken als hij nog niet bestaat
+	[ -e /mail/$INSTANCE/var/imap/user_deny.db ] || touch /mail/$INSTANCE/var/imap/user_deny.db && chown cyrus:mail /mail/$INSTANCE/var/imap/user_deny.db
+
+	if [ -d /dev/shm ]
+	then
+		for dir in proc lock
+		do
+			rm -rf /dev/shm/$INSTANCE/$dir
+			mkdir -p /dev/shm/$INSTANCE/$dir && chown cyrus:mail /dev/shm/$INSTANCE/$dir
+			rm -fr /mail/$INSTANCE/var/imap/$dir && ln -s /dev/shm/$INSTANCE/$dir /mail/$INSTANCE/var/imap/$dir
+		done
+	fi
+
+	# See stop too for this parameter
+	DAEMON_ARGS="-d -M ${CYRUSCONF} -C ${IMAPDCONF} -p $PIDFILE"
+
+	# Setting up environment to create cores
+	MALLOC_CHECK_=2
+	export MALLOC_CHECK_
+	[ -f /proc/sys/kernel/core_uses_pid ] && echo 1 >/proc/sys/kernel/core_uses_pid
+	ulimit -c 102400
+
+        # Start the daemon, phase 1: see if it is already running.
+	ulimit -n 8192
+
+	cd /var/tmp/$INSTANCE
+        $FORCE start-stop-daemon --start --quiet --pidfile $PIDFILE \
+                --exec $DAEMON --test > /dev/null
+        if [ "$?" != 0 ]
+	then
+		echo "cyrus master $INSTANCE already running"
+                return 0
+        fi
+
+        # Start the daemon, phase 2: it was not running, so actually start it now.
+        $FORCE start-stop-daemon -d /var/tmp/$INSTANCE --start --quiet --pidfile $PIDFILE \
+                --exec $DAEMON -- $DAEMON_ARGS
+        if [ "$?" -ne 0 ]; then
+                error_exit "Can't start cyrus master $INSTANCE"
+        fi
+        return 0
+}
+
+# Function that starts a single saslauthd instance
+# Parameters:
+#       $1 = hostname of instance
+# Return value:
+#       0 on success (daemon was stopped)
+#       1 if the daemon was already stopped
+#       2 if the daemon could not be stopped
+do_stop()
+{
+	INSTANCE=$1
+	get_cyrus_env $INSTANCE
+	[ -x $DAEMON ] || error_exit $DAEMON not executable
+
+        # Temporary create dir
+        [ -d /mail/$INSTANCE/etc ] || mkdir /mail/$INSTANCE/etc
+        touch /mail/$INSTANCE/etc/shutdownsync && chown cyrus:mail /mail/$INSTANCE/etc/shutdownsync
+  
+        iteration=0
+        while nr=`pgrep -c -f "/usr/$VERSION/bin/sync_client .*-r -C /etc/cyrus-ugent/conf/$INSTANCE/imapd.conf"`
+        do
+          ((iteration++))
+          touch /mail/$INSTANCE/etc/shutdownsync && chown cyrus:mail /mail/$INSTANCE/etc/shutdownsync
+          sleep 10
+          if ((iteration == 3)) 
+          then
+            nr=`pkill -c -f "/usr/$VERSION/bin/sync_client .*-r -C /etc/cyrus-ugent/conf/$INSTANCE/imapd.conf"`
+          fi
+        done
+
+	# See start too for this parameter
+	DAEMON_ARGS="-d -M ${CYRUSCONF} -C ${IMAPDCONF} -p $PIDFILE"
+
+        $FORCE start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 \
+                --pidfile $PIDFILE --exec $DAEMON
+        if [ "$?" -eq 2 ]
+	then
+		# Retry
+		pkill -f "$DAEMON $DAEMON_ARGS" || error_exit "Failed stop stop cyrus master $INSTANCE"	
+        fi
+
+#        if [ "$?" -eq 1 ]
+#	then
+#		# Already stopped
+#        fi
+
+        # Many daemons don't delete their pidfiles when they exit.
+        rm -f $PIDFILE
+
+        # Clean up file
+        [ -e /mail/$INSTANCE/etc/shutdownsync ] && rm /mail/$INSTANCE/etc/shutdownsync 
+        return 0
+}
+
+# Reload master, send -HUP
+# Parameters:
+#       $1 = instance
+# Return value:
+#       0 on success
+#       1 on failure
+do_reload()
+{
+	INSTANCE=$1
+	get_cyrus_env $INSTANCE
+	$FORCE kill -HUP $(cat $PIDFILE)
+}
+
+
+# Function that gives the status of a cyrus instance
+# Parameters:
+#       $1 = hostname of instance
+do_status()
+{
+	INSTANCE=$1
+	get_cyrus_env $INSTANCE
+	if pgrep -f "$DAEMON -d -M ${CYRUSCONF} -C ${IMAPDCONF} -p $PIDFILE" >/dev/null
+	then
+		return 0
+	else
+		return 3
+	fi
+	
+}
+
+
+case "$1" in
+        start)
+                do_start $INSTANCE
+                ;;
+        stop)
+                do_stop $INSTANCE
+                ;;
+        restart)
+                do_start $INSTANCE
+                do_stop $INSTANCE
+                ;;
+	status)
+		do_status $INSTANCE
+		;;
+	reload)
+		do_reload $INSTANCE
+		;;
+        *)
+		error_exit "$USAGE"
+                ;;
+esac

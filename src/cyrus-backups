@@ -1,0 +1,18 @@
+#!/bin/bash
+
+if [  $# -eq 1 ]
+then
+        mailstore=$1
+else
+        echo "usage: $0 <mailX>"
+        exit
+fi
+
+
+
+
+. /lib/cyrus-ugent/script-functions
+
+get_cyrus_env $mailstore
+
+( find ${STORE_DIR}imap -maxdepth 4 -mindepth 4 -type d ; find ${STORE_DIR} -maxdepth 1 -mindepth 1 -not -name imap -type d ) > ${STORE_DIR}/var/cyrus-dumps/backup_selection.txt

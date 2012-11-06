@@ -1,0 +1,57 @@
+#!/bin/bash
+
+set -x
+if [ $# -lt 3 ] 
+then
+        echo "usage: $0 <mailhost> <mailstore-lunid> <lun> [<lun>]"
+        exit 1
+fi
+
+INSTANCE=$1
+LUNID=$2
+LUN1=$3
+LUN2=$4
+
+dmlinear=/usr/lib/santools/dm_linear
+[ -x  $dmlinear ] || exit 1
+
+# Kijken of de lunid er is.
+if [ -a  /dev/mapper/$LUNID ]
+then
+	echo /dev/mapper/$LUNID bestaat reeds
+	exit 1
+fi
+
+if [ ! -b /dev/mapper/$LUN1 ]
+then
+	echo /dev/mapper/$LUN1 bestaat niet
+	exit 1
+fi
+
+if [ $# -eq 4 ] && [ ! -b /dev/mapper/$LUN2  ]
+then
+	echo /dev/mapper/$LUN2 bestaat niet
+	exit 1
+fi
+
+# Lineair device maken
+
+
+if [ $# -eq 3 ] 
+then
+	$dmlinear /dev/mapper/$LUNID /dev/mapper/$LUN1
+elif [ $# -eq 4 ]  
+then
+	echo mirror TODO
+fi
+
+[ -d /mail/$INSTANCE ] || mkdir /mail/$INSTANCE
+
+# Mounten 
+if mount -o noatime /dev/mapper/$LUNID /mail/$INSTANCE
+then
+	echo Mount gelukt
+else
+	echo Mount mislukt
+	exit 1
+fi

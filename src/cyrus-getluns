@@ -1,0 +1,12 @@
+#!/bin/bash
+
+. /lib/cyrus-ugent/script-functions
+
+USAGE="Usage: $PROGNAME <targettype>"
+CMD=/sbin/dmsetup
+
+targettype=${1:?$USAGE}
+
+test -x ${CMD} || error_exit "$CMD not found"
+
+dmsetup ls --target $1 | grep -v 'ugent-' | cut -f1 | egrep -v '^1 *$'

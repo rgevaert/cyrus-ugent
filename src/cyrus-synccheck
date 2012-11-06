@@ -1,0 +1,47 @@
+#!/bin/bash
+
+INSTANCE=""
+VERSION=""
+
+# dit is als we het willen gebruiken van op de cmd line
+# -n mail4
+while getopts "i:v:" flag
+do
+
+  if [ "${flag}" = "i" ]
+  then
+    INSTANCE="${OPTARG}"
+  fi
+  if [ "${flag}" = "v" ]
+  then
+    VERSION="${OPTARG}"
+  fi
+
+done
+
+if [ -z $INSTANCE ]
+then
+    exit 1
+fi
+
+if [ -z $VERSION ]
+then
+    exit 1
+fi
+
+# wild card here because on startup is runs with -o option
+if nr=`pgrep -c -f "/usr/$VERSION/bin/sync_client .*-r -C /etc/cyrus-ugent/conf/$INSTANCE/imapd.conf"`
+then
+  exit 0
+else
+  # Don't start sync client if it needs to be shut down.
+  [ -e /mail/$INSTANCE/etc/shutdownsync ] && exit 0
+  if [ "cyrus" == `id -un` ]
+  then
+    /usr/$VERSION/bin/sync_client -r -C /etc/cyrus-ugent/conf/$INSTANCE/imapd.conf
+  else
+    su - cyrus -c "/usr/$VERSION/bin/sync_client -r -C /etc/cyrus-ugent/conf/$INSTANCE/imapd.conf"  
+  fi
+  [ -x /usr/bin/mailx ] && echo "sync_client on $INSTANCE started" | mailx -s "sync_client started on ${INSTANCE}" systemen@ugent.be
+  exit 0
+fi

@@ -1,0 +1,73 @@
+PROGNAME=$(basename $0)
+
+function error_exit
+{
+	echo "${PROGNAME}: ${1:-"Unknown Error"}" 1>&2
+	exit 1
+}
+
+# Function that computes parameters for the network interface alias
+# Name of the alias is computed.
+# Parameters:
+#       $1 = hostname of instance
+# Return value:
+#       0 on success (does not mean the instance started)
+#       1 on failure
+function compute_interface_alias
+{
+	instance=$1
+	ALIAS=`echo $instance | sed -e 's/^mail//'`
+	INTERFACE="eth0:${ALIAS}"
+	IPADDRESS=`dig $instance.ugent.be +short`
+	NETMASK=255.255.255.0
+	BROADCAST=`echo $IPADDRESS | awk 'BEGIN { FS = "\." }; {printf("%i.%i.%i.255", $1,$2,$3)}'`
+	GATEWAY=`echo $IPADDRESS | awk 'BEGIN { FS = "\." }; {printf("%i.%i.%i.254", $1,$2,$3)}'`
+	return 0
+}
+
+function get_cyrus_env
+{
+	instance=$1
+	default_file=/etc/default/cyrus-ugent
+
+	[ -r $default_file ] || error_exit "Can't read $default_file"
+	. $default_file
+
+	config_dir=`grep configdirectory /etc/cyrus-ugent/conf/${instance}/imapd.conf | sed -e "s/configdirectory: //" -e "s/ //"`
+	STORE_DIR=`echo $config_dir | sed -e "s/var\/imap.*//"`
+        CYRUSCONF=/etc/cyrus-ugent/conf/${instance}/cyrus.conf
+        IMAPDCONF=/etc/cyrus-ugent/conf/${instance}/imapd.conf
+        PIDFILE=${RUNDIR}/${instance}.pid
+        . /etc/cyrus-ugent/conf/${instance}/${instance}.conf
+	DAEMON=$CYRUS_PATH/bin/master
+}
+
+function get_instances
+{
+	default_file=/etc/default/cyrus-ugent
+	[ -r $default_file ] || error_exit "Can't read $default_file"
+	. $default_file
+
+	if [ -z "${!HOSTNAME}" ]
+	then
+		INSTANCES=`/usr/share/cyrus-ugent/cyrus-getluns multipath | sed -s 's/-.*//'`
+	else
+		INSTANCES="${!HOSTNAME}"
+	fi
+}
+
+function get_master_instances
+{
+	get_instances
+	
+	master_instances=`echo $INSTANCES | tr " " "\n"| egrep -v 'r$'`
+	INSTANCES=$master_instances
+}
+	
+function get_replica_instances
+{
+	get_instances
+	
+	replica_instances=`echo $INSTANCES | tr " " "\n"| egrep 'r$'`
+	INSTANCES=$replica_instances
+}

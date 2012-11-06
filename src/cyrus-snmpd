@@ -1,0 +1,83 @@
+#! /bin/bash
+
+. /lib/cyrus-ugent/script-functions
+
+USAGE="Usage: $PROGNAME {start|stop|restart|reload|force-reload|status} <instance> <force>"
+INSTANCE=${2:?$USAGE}
+
+if [ "$3" == "force" ]
+then
+        FORCE=""
+elif [ "$1" != "status" ]
+then
+        FORCE="echo +"
+        echo "Dry run:"
+fi
+
+test -x /usr/sbin/snmpd || error_exit "Can't find /usr/sbin/snmpd"
+test -x /usr/sbin/snmptrapd || error_exit "Can't find /usr/sbin/snmptrapd"
+
+# Defaults
+export MIBDIRS=/usr/share/snmp/mibs
+SNMPDRUN=yes
+SNMPDOPTS='-Lsd -Lf /dev/null -p /var/run/snmpd.pid'
+TRAPDRUN=no
+TRAPDOPTS='-Lsd -p /var/run/snmptrapd.pid'
+
+# Reads config file (will override defaults above)
+[ -r /etc/default/snmpd-mailstore ] && . /etc/default/snmpd-mailstore
+
+# Cd to / before starting any daemons.
+cd /
+
+# Create compatibility link to old AgentX socket location
+if [ "$SNMPDCOMPAT" = "yes" ]; then
+  $FORCE ln -sf /var/agentx/master /var/run/agentx
+fi
+
+case "$1" in
+  start)
+    if [ "$SNMPDRUN" = "yes" -a -f /etc/snmp/snmpd.conf ]; then
+	$FORCE start-stop-daemon --quiet --start --oknodo -p /var/run/snmpd-$2.pid --exec /usr/sbin/snmpd \
+	    -- $SNMPDOPTS -p /var/run/snmpd-$2.pid -x /var/agentx/$2 --agentxperms="775 755 root mail" tcp:${2}.ugent.be
+    fi
+    if [ "$TRAPDRUN" = "yes" -a -f /etc/snmp/snmptrapd.conf ]; then
+	$FORCE start-stop-daemon --quiet --start --oknodo -p /var/run/snmptrapd-$2.pid --exec /usr/sbin/snmptrapd \
+	    -- $TRAPDOPTS -p /var/run/snmptrapd-$2.pid $2.ugent.be
+    fi
+    ;;
+  stop)
+    $FORCE start-stop-daemon --quiet --stop --oknodo -p /var/run/snmpd-$2.pid --exec /usr/sbin/snmpd
+    $FORCE start-stop-daemon --quiet --stop --oknodo -p /var/run/snmptrapd-$2.pid --exec /usr/sbin/snmptrapd
+    ;;
+  restart)
+    $FORCE start-stop-daemon --quiet --stop --oknodo -p /var/run/snmpd-$2.pid --exec /usr/sbin/snmpd
+    $FORCE start-stop-daemon --quiet --stop --oknodo -p /var/run/snmptrapd-$2.pid --exec /usr/sbin/snmptrapd
+    # Allow the daemons time to exit completely.
+    sleep 2
+    if [ "$SNMPDRUN" = "yes" -a -f /etc/snmp/snmpd.conf ]; then
+	$FORCE start-stop-daemon --quiet --start -p /var/run/snmpd-$2.pid --exec /usr/sbin/snmpd -- $SNMPDOPTS -p /var/run/snmpd-$2.pid -x /var/agentx/$2 --agentxperms="775 755 root mail" tcp:${2}.ugent.be
+    fi
+    if [ "$TRAPDRUN" = "yes" -a -f /etc/snmp/snmptrapd.conf ]; then
+	# Allow snmpd time to start up.
+	sleep 1
+	$FORCE start-stop-daemon --quiet --start -p /var/run/snmptrapd-$2.pid --exec /usr/sbin/snmptrapd -- $TRAPDOPTS -p /var/run/snmptrapd-$2.pid tcp:${2}.ugent.be
+    fi
+    ;;
+  reload|force-reload)
+    if [ "$SNMPDRUN" = "yes" -a -f /etc/snmp/snmpd.conf ]; then
+        $FORCE start-stop-daemon --quiet --stop --signal 1 \
+	    --pidfile /var/run/snmpd-$2.pid --exec /usr/sbin/snmpd
+    fi
+    ;;
+ status)
+    if pgrep -f "snmpd.*/var/run/snmpd-$2" > /dev/null
+    then
+      exit 0
+    else
+      exit 3
+    fi
+    ;;
+  *)
+    error_exit "$USAGE"
+esac

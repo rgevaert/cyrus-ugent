@@ -1,0 +1,109 @@
+#!/bin/bash
+
+. /lib/cyrus-ugent/script-functions
+
+USAGE="Usage: $PROGNAME mount|unmount|status <mailhost> <mailstore-lunid> <lun> [force]"
+
+BLAH=${4:?$USAGE}
+
+ACTION=$1
+INSTANCE=$2
+MOUNTPOINT=/mail/$INSTANCE
+LUNID=/dev/mapper/$3
+LUNID_SHORT=$3
+LUN1=/dev/mapper/$4
+LUN1_SHORT=$4
+
+if [ "$5" == "force" ] 
+then
+        FORCE=""
+else
+        FORCE="echo +"
+        echo "Dry run:"
+fi
+
+dmlinear=/usr/lib/santools/dm_linear
+
+[ -x $dmlinear ] || error_exit "Can't execute $dmlinear"
+
+function mount_instance()
+{
+	[ -a $LUNID ] && error_exit "$LUNID already exists"
+	[ -b $LUN1  ] || error_exit "$LUN1 doesn't exists"
+
+	# Lineair device maken
+	$FORCE $dmlinear $LUNID $LUN1
+
+	# Mounten 
+	mkdir -p $MOUNTPOINT && $FORCE mount -o noatime -t xfs $LUNID $MOUNTPOINT || error_exit "Couldn't mount $LUNID on $MOUNTPOINT"
+}
+
+
+function unmount_instance()
+{
+	if /bin/mountpoint -q $MOUNTPOINT
+	then
+		$FORCE umount $MOUNTPOINT
+	fi
+
+	if dmsetup table | grep -q $LUNID_SHORT
+	then
+		$FORCE dmsetup remove $LUNID_SHORT
+	fi
+}
+
+function status()
+{
+	r=0
+	if dmsetup status $LUN1_SHORT > /dev/null 2>&1
+	then
+		if dmsetup status $LUNID_SHORT >/dev/null  2>&1 
+		then
+			read l_begin l_size l_linear l_device l_device_begin < <(  dmsetup table $LUNID_SHORT )
+			major_ld=${l_device%:*}
+			minor_ld=${l_device#*:}
+			read major_a minor_a < <(stat -Lt $LUN1 | mawk '{printf "%d %d\n", "0x"$10, "0x"$11 }' )
+
+			if [ "$major_ld:$minor_ld" != "$major_a:$minor_a" ]
+			then
+				echo "Devicemapper mapping not ok"
+				r=1
+			fi
+
+		fi
+	else
+		r=1
+		echo "$LUN1 not found, check storage;"
+	fi
+
+	if egrep -q "$LUNID|$MOUNTPOINT|$LUN1" /proc/mounts
+	then
+		if ! grep -q "$LUNID $MOUNTPOINT" /proc/mounts
+		then
+			r=1
+			echo "incorrect usage of $LUNID_SHORT, $LUN1_SHORT, $MOUNTPOINT in place, check mounts or unmount;"
+		fi
+	fi
+
+#	if [ $r -eq 0 ]
+#	then
+#		echo ok
+#	fi
+	return $r
+}
+
+case "$ACTION" in
+        mount)
+                mount_instance $instance
+                ;;
+        unmount)
+                unmount_instance $instance
+                ;;
+        status)
+                status $instance
+                ;;
+        *)
+                error_exit "$USAGE"
+                
+                ;;
+esac

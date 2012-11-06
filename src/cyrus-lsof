@@ -1,0 +1,35 @@
+#!/bin/bash
+
+INSTANCE=""
+KILL=0
+
+# dit is als we het willen gebruiken van op de cmd line
+# -n mail4
+while getopts "i:k" flag
+do
+
+  if [ "${flag}" = "i" ]
+  then
+    INSTANCE="${OPTARG}"
+  fi
+  if [ "${flag}" = "k" ]
+  then
+    KILL=1
+  fi
+
+done
+
+if [ -z $INSTANCE ]
+then
+    exit 1
+fi
+
+if [ $KILL -eq 1 ]
+then
+  for i in $(lsof | awk "\$9 ~ /\/mail\/$INSTANCE/ { print \$2}" | sort | uniq)
+  do
+    kill $i
+  done
+else
+  lsof | awk "\$9 ~ /\/mail\/$INSTANCE/ { print \$2}" | sort | uniq
+fi

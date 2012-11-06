@@ -1,0 +1,110 @@
+#!/bin/bash
+#
+# cyrus-stunnel	script that brings up stunnel for an cyrus instance
+#
+#		Copr. 2010 by Rudy Gevaert <Rudy.Gevaert@UGent.be>
+#		Distributed under the GPL version 3 or later
+
+. /lib/cyrus-ugent/script-functions
+
+# Make sure we get sane results on borked locales
+LC_ALL=C
+export LC_ALL
+
+USAGE="Usage: $PROGNAME start|stop|status <instance> <force>"
+DAEMON=/usr/bin/stunnel4
+
+action=${1:?$USAGE}
+instance=${2:?$USAGE}
+
+if [ "$3" == "force" ]
+then
+	FORCE=""
+elif [ "$1" != "status" ]
+then
+	FORCE="echo +"
+	echo "Dry run:"
+fi
+
+configfile=/var/run/cyrus-ugent/stunnel-$instance.conf
+
+test -x ${DAEMON} || exit 1
+
+generate_config()
+{
+(
+cat <<EOF
+setuid = stunnel4
+setgid = stunnel4
+pid = /var/run/stunnel4/$instance.pid
+
+socket = l:TCP_NODELAY=1
+socket = r:TCP_NODELAY=1
+
+debug = 7
+
+client = no
+
+cert = $cert
+CAfile = $CAfile
+key = $key
+
+[sieve_$instance]
+accept  = $instance.ugent.be:4000
+connect = $instance.ugent.be:4190
+
+[sievecas_$instance]
+accept  = $instance.ugent.be:4001
+connect = $instance.ugent.be:4736
+
+EOF
+) > $configfile
+}
+
+start()
+{
+	instance=$1
+	cert=/etc/cyrus-ugent/certs/${instance}.pem
+	CAfile=/etc/cyrus-ugent/certs/terena_chain.pem
+	key=/etc/cyrus-ugent/keys/${instance}.key
+
+	[ -r $cert ] || error_exit "Can't read $cert"
+	[ -r $CAfile ] || error_exit "Can't read $CAfile"
+	[ -r $key ] || error_exit "Can't read $key"
+
+	generate_config
+	$FORCE /usr/bin/stunnel4 $configfile
+
+}
+
+stop()
+{
+	$FORCE pkill -f "/usr/bin/stunnel4 $configfile"
+	$FORCE rm -f $configfile
+}
+
+status()
+{
+	if pgrep -f "/usr/bin/stunnel4 $configfile" > /dev/null
+	then
+		return 0
+	else
+		return 3
+	fi
+}
+
+case "$action" in
+        start)
+                start $instance
+                ;;
+        stop)
+                stop $instance
+                ;;
+        status)
+                status $instance
+                ;;
+        *)
+                error_exit "$USAGE"
+                
+                ;;
+esac

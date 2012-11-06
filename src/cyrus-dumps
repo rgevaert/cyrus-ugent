@@ -1,0 +1,46 @@
+#!/bin/bash
+
+if [  $# -eq 2 ]
+then
+        mailstore=$1
+	version=$2
+else
+        echo "usage: cyrus-dumps <mailX> <cyrus-2.3.X>"
+        exit
+fi
+
+. /lib/cyrus-ugent/script-functions
+
+get_cyrus_env $mailstore
+ctl_mboxlist="${CYRUS_PATH}/bin/ctl_mboxlist -C /etc/cyrus-ugent/conf/$mailstore/imapd.conf -d"
+
+dump_file="${STORE_DIR}/var/cyrus-dumps/mailboxes.txt"
+
+if [ `/usr/bin/id -un` != cyrus ]
+then
+        echo fatal error: must run as cyrus user
+        exit 1
+fi
+
+if [ ! -d `dirname $dump_file` ] 
+then
+	mkdir -p `dirname $dump_file`
+fi
+
+if `$ctl_mboxlist > ${dump_file}`
+then
+        rm -f ${dump_file}.7
+
+        for i in 6 5 4 3 2 1
+        do
+                j=`expr $i + 1`
+                if [ -e ${dump_file}.${i} ]
+                then
+                        mv -f ${dump_file}.${i} ${dump_file}.${j}
+                fi
+        done
+
+        mv ${dump_file} ${dump_file}.1
+else
+        echo "Could not take dump of mailboxes.db on ${mailstore}" | mailx -s "problem cyrus dumps ${mailstore}" root@ugent.be
+fi

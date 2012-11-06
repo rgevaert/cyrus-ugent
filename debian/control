@@ -1,0 +1,14 @@
+Source: cyrus-ugent
+Section: mailstores/mail
+Priority: extra
+Maintainer: Rudy Gevaert <Rudy.Gevaert@UGent.be>
+Build-Depends: debhelper (>=  7)
+Standards-Version: 3.8.3
+Homepage: http://savannah.ugent.be/projects/mailstores
+
+Package: cyrus-ugent
+Architecture: amd64
+Depends: ${misc:Depends},  ${perl:Depends}, linux-image, firmware-qlogic, firmware-bnx2, firmware-linux-free, snmpd, stunnel4, santools-ugent, rsyslog, multipath-tools, arping
+Conflicts: multipath-tools-boot
+Description: Scripts to run the cyrus mailstores.
+ Scripts to run the cyrus mailstores.
