@@ -1,3 +1,9 @@
+cyrus-ugent (0.1-55) wheezy; urgency=low
+
+  * Wheezy release.
+
+ -- Rudy Gevaert <Rudy.Gevaert@UGent.be>  Tue, 06 Nov 2012 14:42:10 +0100
+
 cyrus-ugent (0.1-54) lucid; urgency=low
 
   * Change port of sievecas stunnel to 4001
