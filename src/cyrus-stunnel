@@ -27,6 +27,7 @@ then
 fi
 
 configfile=/var/run/cyrus-ugent/stunnel-$instance.conf
+[ -x /var/run/cyrus-ugent ] || mkdir /var/run/cyrus-ugent
 
 test -x ${DAEMON} || exit 1
 
