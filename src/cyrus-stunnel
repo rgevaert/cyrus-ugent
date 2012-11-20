@@ -28,6 +28,8 @@ fi
 
 configfile=/var/run/cyrus-ugent/stunnel-$instance.conf
 [ -x /var/run/cyrus-ugent ] || mkdir /var/run/cyrus-ugent
+[ -x /var/run/stunnel4 ]    || mkdir /var/run/stunnel4
+chown stunnel4:stunnel4 /var/run/stunnel4
 
 test -x ${DAEMON} || exit 1
 
