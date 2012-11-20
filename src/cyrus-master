@@ -132,7 +132,8 @@ do_stop()
           sleep 10
           if ((iteration == 3)) 
           then
-            nr=`pkill -c -f "/usr/$VERSION/bin/sync_client .*-r -C /etc/cyrus-ugent/conf/$INSTANCE/imapd.conf"`
+            pkill -f "/usr/$VERSION/bin/sync_client .*-r -C /etc/cyrus-ugent/conf/$INSTANCE/imapd.conf"
+            nr=`pgrep -c -f "/usr/$VERSION/bin/sync_client .*-r -C /etc/cyrus-ugent/conf/$INSTANCE/imapd.conf"`
           fi
         done
 
