@@ -1,3 +1,9 @@
+cyrus-ugent (0.1-60) wheezy; urgency=low
+
+  * Add REPORTADDRESS variable to cyrus-synccheck
+
+ -- Rudy Gevaert <rgevaert@pimp>  Mon, 21 Jan 2013 10:21:39 +0100
+
 cyrus-ugent (0.1-59) wheezy; urgency=low
 
   * Dummy release.  To test Jenkins

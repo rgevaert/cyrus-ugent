@@ -2,6 +2,7 @@
 
 INSTANCE=""
 VERSION=""
+REPORTADDRESS="systemen@ugent.be"
 
 # dit is als we het willen gebruiken van op de cmd line
 # -n mail4
@@ -29,6 +30,11 @@ then
     exit 1
 fi
 
+if [ -e /etc/cyrus-ugent/synccheck ]
+then
+    . /etc/cyrus-ugent/synccheck
+fi
+
 # wild card here because on startup is runs with -o option
 if nr=`pgrep -c -f "/usr/$VERSION/bin/sync_client .*-r -C /etc/cyrus-ugent/conf/$INSTANCE/imapd.conf"`
 then
@@ -42,6 +48,6 @@ else
   else
     su - cyrus -c "/usr/$VERSION/bin/sync_client -r -C /etc/cyrus-ugent/conf/$INSTANCE/imapd.conf"  
   fi
-  [ -x /usr/bin/mailx ] && echo "sync_client on $INSTANCE started" | mailx -s "sync_client started on ${INSTANCE}" systemen@ugent.be
+  [ -x /usr/bin/mailx ] && echo "sync_client on $INSTANCE started" | mailx -s "sync_client started on ${INSTANCE}" $REPORTADDRESS
   exit 0
 fi
